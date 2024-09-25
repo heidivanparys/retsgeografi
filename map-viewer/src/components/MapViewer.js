@@ -10,20 +10,6 @@ import VectorSource from 'ol/source/Vector';
 import { WMTS } from 'ol/source'
 import svg from '@dataforsyningen/designsystem/assets/icons.svg';
 import WMTSTileGrid from 'ol/tilegrid/WMTS.js';
-import {get as getProjection} from 'ol/proj.js';
-import {getTopLeft, getWidth} from 'ol/extent.js';
-
-
-const projection = getProjection('EPSG:3857');
-const projectionExtent = projection.getExtent();
-const resolutions = new Array(19);
-const matrixIds = new Array(19);
-const size = getWidth(projectionExtent) / 256;
-for (let z = 0; z < 19; ++z) {
-  // generate resolutions and matrixIds arrays for this WMTS
-  resolutions[z] = size / Math.pow(2, z);
-  matrixIds[z] = z;
-}
 
 class MapViewer extends LitElement {
   static styles = css`
@@ -132,26 +118,6 @@ class MapViewer extends LitElement {
         new TileLayer({
           source: new OSM(),
         }),
-        new TileLayer({
-          opacity: 0.7,
-          source: new WMTS({
-            attributions:
-              'Tiles © <a href="https://mrdata.usgs.gov/geology/state/"' +
-              ' target="_blank">USGS</a>',
-            url: 'https://mrdata.usgs.gov/mapcache/wmts',
-            layer: 'sgmc2',
-            matrixSet: 'GoogleMapsCompatible',
-            format: 'image/png',
-            projection: projection,
-            tileGrid: new WMTSTileGrid({
-              origin: getTopLeft(projectionExtent),
-              resolutions: resolutions,
-              matrixIds: matrixIds,
-            }),
-            style: 'default',
-            wrapX: true,
-          }),
-        }),
       ],
       view: new View({
         center: [0, 0],
@@ -191,20 +157,38 @@ class MapViewer extends LitElement {
 
   loadGML(gmlString) {
     const format = new GML2();
+
+    // Read features from the GML string
     const features = format.readFeatures(gmlString, {
       featureProjection: 'EPSG:25832',
     });
 
+    console.log('Number of features loaded:', features.length);
+
+    // Log details of each feature
+    features.forEach((feature, index) => {
+      const geometry = feature.getGeometry();
+      const properties = feature.getProperties();
+
+      console.log(`Feature ${index + 1}:`);
+      console.log('  Geometry:', geometry.getType());
+      console.log('  Coordinates:', geometry.getCoordinates());
+      console.log('  Properties:', properties);
+    });
+
+    // Create a vector source with the features
     const vectorSource = new VectorSource({
       features: features,
     });
 
+    // Add a vector layer to the map
     const vectorLayer = new VectorLayer({
       source: vectorSource,
     });
 
     this.map1.addLayer(vectorLayer);
   }
+
 
   render() {
     return html`
