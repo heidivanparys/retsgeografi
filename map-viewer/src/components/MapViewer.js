@@ -3,10 +3,27 @@ import 'ol/ol.css';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import { Tile as TileLayer } from 'ol/layer';
-import { OSM } from 'ol/source';
+import {OSM, TileWMS} from 'ol/source';
 import GML2 from 'ol/format/GML2.js';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
+import { WMTS } from 'ol/source'
+import svg from '@dataforsyningen/designsystem/assets/icons.svg';
+import WMTSTileGrid from 'ol/tilegrid/WMTS.js';
+import {get as getProjection} from 'ol/proj.js';
+import {getTopLeft, getWidth} from 'ol/extent.js';
+
+
+const projection = getProjection('EPSG:3857');
+const projectionExtent = projection.getExtent();
+const resolutions = new Array(19);
+const matrixIds = new Array(19);
+const size = getWidth(projectionExtent) / 256;
+for (let z = 0; z < 19; ++z) {
+  // generate resolutions and matrixIds arrays for this WMTS
+  resolutions[z] = size / Math.pow(2, z);
+  matrixIds[z] = z;
+}
 
 class MapViewer extends LitElement {
   static styles = css`
@@ -76,17 +93,34 @@ class MapViewer extends LitElement {
   }
 
   initMaps() {
+    const projection = 'EPSG:25832';
     // Main map initialization
     this.map1 = new Map({
       target: this.shadowRoot.getElementById('map1'),
       layers: [
         new TileLayer({
-          source: new OSM(),
+          opacity: 1.0,
+          title: 'Skærmkortet',
+          type: 'base',
+          visible: true,
+          source: new WMTS({
+            url: 'https://api.dataforsyningen.dk/topo_skaermkort_daempet_DAF?token=9ca510be3c4eca89b1333cadbaa60c36',
+            layer: 'topo_skaermkort_daempet',
+            matrixSet: 'View1',
+            format: 'image/jpeg',
+            style: 'default',
+            size: [256, 256],
+            tileGrid: new WMTSTileGrid({
+              extent: [120000, 5900000, 1000000, 6500000],
+              resolutions: [1638.4, 819.2, 409.6, 204.8, 102.4, 51.2, 25.6, 12.8, 6.4, 3.2, 1.6, 0.8, 0.4, 0.2],
+              matrixIds: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13']
+            })
+          })
         }),
       ],
       view: new View({
-        center: [0, 0],
-        zoom: 2,
+        center: [600000, 6225000],
+        zoom: 8,
       }),
       controls: [], // Remove default controls
     });
@@ -97,6 +131,26 @@ class MapViewer extends LitElement {
       layers: [
         new TileLayer({
           source: new OSM(),
+        }),
+        new TileLayer({
+          opacity: 0.7,
+          source: new WMTS({
+            attributions:
+              'Tiles © <a href="https://mrdata.usgs.gov/geology/state/"' +
+              ' target="_blank">USGS</a>',
+            url: 'https://mrdata.usgs.gov/mapcache/wmts',
+            layer: 'sgmc2',
+            matrixSet: 'GoogleMapsCompatible',
+            format: 'image/png',
+            projection: projection,
+            tileGrid: new WMTSTileGrid({
+              origin: getTopLeft(projectionExtent),
+              resolutions: resolutions,
+              matrixIds: matrixIds,
+            }),
+            style: 'default',
+            wrapX: true,
+          }),
         }),
       ],
       view: new View({
@@ -138,7 +192,7 @@ class MapViewer extends LitElement {
   loadGML(gmlString) {
     const format = new GML2();
     const features = format.readFeatures(gmlString, {
-      featureProjection: 'EPSG:3857',
+      featureProjection: 'EPSG:25832',
     });
 
     const vectorSource = new VectorSource({
@@ -159,25 +213,27 @@ class MapViewer extends LitElement {
         <div id="map2" class="map"></div>
 
         <div id="controls">
+        <!--
           <button @click="${this.toggleSecondMap}" title="Toggle Second Map">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-              <path d="M12 2L2 12h3v8h6v-6h2v6h6v-8h3z"/>
+            <svg>
+              <use href="${svg}#frame-dual"></use>
             </svg>
           </button>
+          -->
           <button @click="${this.zoomIn}" title="Zoom In">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-              <path d="M12 10h10v4H12v10h-4V14H2v-4h6V2h4z"/>
+            <svg>
+              <use href="${svg}#plus"></use>
             </svg>
           </button>
           <button @click="${this.zoomOut}" title="Zoom Out">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-              <path d="M2 10h20v4H2z"/>
+            <svg>
+              <use href="${svg}#minus"></use>
             </svg>
           </button>
           <input type="file" id="file-input" @change="${this.uploadGML}" />
           <label for="file-input" title="Upload GML">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-              <path d="M5 20h14v-2H5v2zm7-18L5 9h4v6h4V9h4L12 2z"/>
+            <svg>
+              <use href="${svg}#arrow-up"></use>
             </svg>
           </label>
         </div>
