@@ -4,24 +4,30 @@ import Map from 'ol/Map';
 import View from 'ol/View';
 import { Tile as TileLayer } from 'ol/layer';
 import {OSM, TileWMS} from 'ol/source';
-import GML2 from 'ol/format/GML2.js';
+
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import { WMTS } from 'ol/source'
 import svg from '@dataforsyningen/designsystem/assets/icons.svg';
 import WMTSTileGrid from 'ol/tilegrid/WMTS.js';
 import { Style, Stroke, Fill } from 'ol/style.js';
+import GML2 from 'ol/format/GML2.js';
 import GML3 from 'ol/format/GML3.js';
+import GML32 from 'ol/format/GML32.js'
 import { register } from 'ol/proj/proj4';
 import { get } from 'ol/proj';
 import proj4 from 'proj4';
 
 // Define and register the projection for EPSG:25832
-proj4.defs('EPSG:25832', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs');
+proj4.defs('EPSG:25832', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +axis=enu');
 register(proj4);
 
-// Retrieve the projection object and set its axis orientation
+// Get the EPSG:25832 projection
 const epsg25832 = get('EPSG:25832');
+
+// Check the axis orientation
+const axisOrientation = epsg25832.getAxisOrientation();
+console.log('EPSG:25832 Axis Orientation:', axisOrientation); // Should output 'enu'
 
 
 class MapViewer extends LitElement {
@@ -107,6 +113,7 @@ class MapViewer extends LitElement {
             format: 'image/jpeg',
             style: 'default',
             size: [256, 256],
+            axisOrientation: 'enu',
             tileGrid: new WMTSTileGrid({
               extent: [120000, 5900000, 1000000, 6500000],
               resolutions: [1638.4, 819.2, 409.6, 204.8, 102.4, 51.2, 25.6, 12.8, 6.4, 3.2, 1.6, 0.8, 0.4, 0.2],
@@ -118,7 +125,7 @@ class MapViewer extends LitElement {
       view: new View({
         center: [600000, 6225000],
         zoom: 8,
-        projection: 'EPSG:25832'  // Ensure correct projection is set
+        projection: epsg25832  // Ensure correct projection is set
       }),
       controls: [], // Remove default controls
     });
@@ -168,21 +175,24 @@ class MapViewer extends LitElement {
   }
 
   loadGML(gmlString) {
-    const format = new GML3();  // Use GML3 format
+    let format;
+
+    // You could also check for specific version info in the file if needed
+    if (this.isGML32(gmlString)) {
+      format = new GML32();
+    } else {
+      format = new GML3();
+    }
     console.log('GML content:', gmlString);
 
     let features;
     try {
       features = format.readFeatures(gmlString, {
-        featureProjection: 'EPSG:25832',
+        featureProjection: 'EPSG:25832',  // Ensure the correct projection is used
+        dataProjection: 'EPSG:25832',  // Use dataProjection if your GML file specifies the data projection
       });
     } catch (error) {
       console.error('Error parsing GML:', error);
-      return;  // Stop further processing if parsing fails
-    }
-
-    if (features.length === 0) {
-      console.warn('No features found in GML');
       return;
     }
 
@@ -204,9 +214,10 @@ class MapViewer extends LitElement {
     }
   }
 
-
-
-
+  isGML32(gmlString) {
+    // Simple check to identify GML 3.2, adjust according to your actual file structure.
+    return gmlString.includes('gml32') || gmlString.includes('http://www.opengis.net/gml/3.2');
+  }
 
   render() {
     return html`
