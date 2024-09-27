@@ -10,6 +10,19 @@ import VectorSource from 'ol/source/Vector';
 import { WMTS } from 'ol/source'
 import svg from '@dataforsyningen/designsystem/assets/icons.svg';
 import WMTSTileGrid from 'ol/tilegrid/WMTS.js';
+import { Style, Stroke, Fill } from 'ol/style.js';
+import GML3 from 'ol/format/GML3.js';
+import { register } from 'ol/proj/proj4';
+import { get } from 'ol/proj';
+import proj4 from 'proj4';
+
+// Define and register the projection for EPSG:25832
+proj4.defs('EPSG:25832', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs');
+register(proj4);
+
+// Retrieve the projection object and set its axis orientation
+const epsg25832 = get('EPSG:25832');
+
 
 class MapViewer extends LitElement {
   static styles = css`
@@ -79,8 +92,6 @@ class MapViewer extends LitElement {
   }
 
   initMaps() {
-    const projection = 'EPSG:25832';
-    // Main map initialization
     this.map1 = new Map({
       target: this.shadowRoot.getElementById('map1'),
       layers: [
@@ -107,6 +118,7 @@ class MapViewer extends LitElement {
       view: new View({
         center: [600000, 6225000],
         zoom: 8,
+        projection: 'EPSG:25832'  // Ensure correct projection is set
       }),
       controls: [], // Remove default controls
     });
@@ -156,38 +168,44 @@ class MapViewer extends LitElement {
   }
 
   loadGML(gmlString) {
-    const format = new GML2();
+    const format = new GML3();  // Use GML3 format
+    console.log('GML content:', gmlString);
 
-    // Read features from the GML string
-    const features = format.readFeatures(gmlString, {
-      featureProjection: 'EPSG:25832',
-    });
+    let features;
+    try {
+      features = format.readFeatures(gmlString, {
+        featureProjection: 'EPSG:25832',
+      });
+    } catch (error) {
+      console.error('Error parsing GML:', error);
+      return;  // Stop further processing if parsing fails
+    }
 
-    console.log('Number of features loaded:', features.length);
+    if (features.length === 0) {
+      console.warn('No features found in GML');
+      return;
+    }
 
-    // Log details of each feature
-    features.forEach((feature, index) => {
-      const geometry = feature.getGeometry();
-      const properties = feature.getProperties();
-
-      console.log(`Feature ${index + 1}:`);
-      console.log('  Geometry:', geometry.getType());
-      console.log('  Coordinates:', geometry.getCoordinates());
-      console.log('  Properties:', properties);
-    });
-
-    // Create a vector source with the features
     const vectorSource = new VectorSource({
       features: features,
     });
 
-    // Add a vector layer to the map
     const vectorLayer = new VectorLayer({
       source: vectorSource,
     });
 
     this.map1.addLayer(vectorLayer);
+
+    const extent = vectorSource.getExtent();
+    if (!isNaN(extent[0]) && !isNaN(extent[2])) {
+      this.map1.getView().fit(extent, { size: this.map1.getSize(), maxZoom: 18 });
+    } else {
+      console.error('Invalid extent:', extent);
+    }
   }
+
+
+
 
 
   render() {
