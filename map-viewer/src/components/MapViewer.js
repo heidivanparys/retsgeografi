@@ -20,6 +20,8 @@ import proj4 from 'proj4';
 
 // Define and register the projection for EPSG:25832
 proj4.defs('EPSG:25832', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +axis=enu');
+// Define the http URI form of EPSG:25832 as named alias
+proj4.defs('http://www.opengis.net/def/crs/EPSG/0/25832', proj4.defs('EPSG:25832'));
 register(proj4);
 
 // Get the EPSG:25832 projection
