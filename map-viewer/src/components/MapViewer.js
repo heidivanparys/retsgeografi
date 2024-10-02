@@ -1,36 +1,28 @@
+// MapViewer.js
+
 import { LitElement, html, css } from 'lit';
 import 'ol/ol.css';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import { Tile as TileLayer } from 'ol/layer';
-import {OSM, TileWMS} from 'ol/source';
-
+import { OSM, WMTS } from 'ol/source';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
-import { WMTS } from 'ol/source'
-import svg from '@dataforsyningen/designsystem/assets/icons.svg';
 import WMTSTileGrid from 'ol/tilegrid/WMTS.js';
+import svg from '@dataforsyningen/designsystem/assets/icons.svg'
 import { Style, Stroke, Fill } from 'ol/style.js';
-import GML2 from 'ol/format/GML2.js';
-import GML3 from 'ol/format/GML3.js';
-import GML32 from 'ol/format/GML32.js'
+import GML32 from 'ol/format/GML32.js';
 import { register } from 'ol/proj/proj4';
 import { get } from 'ol/proj';
 import proj4 from 'proj4';
 
 // Define and register the projection for EPSG:25832
 proj4.defs('EPSG:25832', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +axis=enu');
-// Define the http URI form of EPSG:25832 as named alias
 proj4.defs('http://www.opengis.net/def/crs/EPSG/0/25832', proj4.defs('EPSG:25832'));
 register(proj4);
 
 // Get the EPSG:25832 projection
 const epsg25832 = get('EPSG:25832');
-
-// Check the axis orientation
-const axisOrientation = epsg25832.getAxisOrientation();
-console.log('EPSG:25832 Axis Orientation:', axisOrientation); // Should output 'enu'
-
 
 class MapViewer extends LitElement {
   static styles = css`
@@ -88,11 +80,18 @@ class MapViewer extends LitElement {
       input[type="file"] {
           display: none;
       }
+
+      #layer-toggles {
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+      }
   `;
 
   constructor() {
     super();
     this.showSecondMap = false;
+    this.vectorLayers = [];  // Store added vector layers
   }
 
   firstUpdated() {
@@ -131,23 +130,6 @@ class MapViewer extends LitElement {
       }),
       controls: [], // Remove default controls
     });
-
-    // Secondary map initialization (hidden initially)
-    this.map2 = new Map({
-      target: this.shadowRoot.getElementById('map2'),
-      layers: [
-        new TileLayer({
-          source: new OSM(),
-        }),
-      ],
-      view: new View({
-        center: [0, 0],
-        zoom: 2,
-      }),
-      controls: [], // Remove default controls
-    });
-
-    this.shadowRoot.getElementById('map2').style.display = 'none';
   }
 
   toggleSecondMap() {
@@ -165,29 +147,27 @@ class MapViewer extends LitElement {
     view.setZoom(view.getZoom() - 1);
   }
 
-  uploadGML(event) {
-    const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        this.loadGML(reader.result);
-      };
-      reader.readAsText(file);
+  uploadFiles(event) {
+    const files = event.target.files;
+    const gmlFile = [...files].find(file => file.name.endsWith('.gml'));
+    const xsdFile = [...files].find(file => file.name.endsWith('.xsd'));
+
+    if (gmlFile && xsdFile) {
+      const gmlReader = new FileReader();
+      const xsdReader = new FileReader();
+
+      gmlReader.onload = () => this.loadGML(gmlReader.result);
+      xsdReader.onload = () => this.loadXSD(xsdReader.result);
+
+      gmlReader.readAsText(gmlFile);
+      xsdReader.readAsText(xsdFile);
     }
   }
 
   loadGML(gmlString) {
-    let format;
-
-    // You could also check for specific version info in the file if needed
-    if (this.isGML32(gmlString)) {
-      format = new GML32();
-    } else {
-      format = new GML3();
-    }
-    console.log('GML content:', gmlString);
-
+    const format = new GML32();  // Assuming GML 3.2 format
     let features;
+
     try {
       features = format.readFeatures(gmlString, {
         featureProjection: 'EPSG:25832',  // Ensure the correct projection is used
@@ -204,9 +184,11 @@ class MapViewer extends LitElement {
 
     const vectorLayer = new VectorLayer({
       source: vectorSource,
+      title: 'GML Layer'  // Add a title for toggle control
     });
 
     this.map1.addLayer(vectorLayer);
+    this.vectorLayers.push(vectorLayer);  // Store the layer for toggling
 
     const extent = vectorSource.getExtent();
     if (!isNaN(extent[0]) && !isNaN(extent[2])) {
@@ -216,25 +198,79 @@ class MapViewer extends LitElement {
     }
   }
 
-  isGML32(gmlString) {
-    // Simple check to identify GML 3.2, adjust according to your actual file structure.
-    return gmlString.includes('gml32') || gmlString.includes('http://www.opengis.net/gml/3.2');
+  loadXSD(xsdString) {
+    const descriptions = this.parseXSD(xsdString);
+    console.log('Parsed XSD descriptions:', descriptions);
+  }
+
+  parseXSD(xsdString) {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xsdString, "application/xml");
+
+    const descriptions = {};
+
+    // Extract top-level elements
+    const elements = xmlDoc.getElementsByTagName('element');
+    for (let i = 0; i < elements.length; i++) {
+      const element = elements[i];
+      const name = element.getAttribute('name');
+      const type = element.getAttribute('type');
+      const doc = this.extractDocumentation(element);
+
+      if (name && type) {
+        descriptions[name] = { type, doc };
+      }
+    }
+
+    // Extract complex types and their sequences
+    const complexTypes = xmlDoc.getElementsByTagName('complexType');
+    for (let i = 0; i < complexTypes.length; i++) {
+      const complexType = complexTypes[i];
+      const typeName = complexType.getAttribute('name');
+      const sequence = complexType.getElementsByTagName('sequence')[0];
+
+      if (sequence) {
+        const childElements = sequence.getElementsByTagName('element');
+        descriptions[typeName] = [];
+
+        for (let j = 0; j < childElements.length; j++) {
+          const child = childElements[j];
+          const childName = child.getAttribute('name');
+          const childType = child.getAttribute('type');
+          const childDoc = this.extractDocumentation(child);
+
+          if (childName && childType) {
+            descriptions[typeName].push({ name: childName, type: childType, doc: childDoc });
+          }
+        }
+      }
+    }
+
+    return descriptions;
+  }
+
+  extractDocumentation(element) {
+    const annotation = element.getElementsByTagName('annotation')[0];
+    if (annotation) {
+      const documentation = annotation.getElementsByTagName('documentation')[0];
+      if (documentation) {
+        return documentation.textContent.trim();
+      }
+    }
+    return null;
+  }
+
+
+  toggleLayer(layer) {
+    layer.setVisible(!layer.getVisible());
   }
 
   render() {
     return html`
       <div id="map-container">
         <div id="map1" class="map"></div>
-        <div id="map2" class="map"></div>
 
         <div id="controls">
-        <!--
-          <button @click="${this.toggleSecondMap}" title="Toggle Second Map">
-            <svg>
-              <use href="${svg}#frame-dual"></use>
-            </svg>
-          </button>
-          -->
           <button @click="${this.zoomIn}" title="Zoom In">
             <svg>
               <use href="${svg}#plus"></use>
@@ -245,12 +281,22 @@ class MapViewer extends LitElement {
               <use href="${svg}#minus"></use>
             </svg>
           </button>
-          <input type="file" id="file-input" @change="${this.uploadGML}" />
-          <label for="file-input" title="Upload GML">
+          <input type="file" id="file-input" multiple @change="${this.uploadFiles}" />
+          <label for="file-input" title="Upload GML & XSD">
             <svg>
               <use href="${svg}#arrow-up"></use>
             </svg>
           </label>
+
+          <!-- Layer toggle controls -->
+          <div id="layer-toggles">
+            ${this.vectorLayers.map(layer => html`
+              <label>
+                <input type="checkbox" checked @change="${() => this.toggleLayer(layer)}">
+                ${layer.get('title')}
+              </label>
+            `)}
+          </div>
         </div>
       </div>
     `;
