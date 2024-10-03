@@ -152,14 +152,14 @@ class MapViewer extends LitElement {
     const gmlFile = [...files].find(file => file.name.endsWith('.gml'));
     const xsdFile = [...files].find(file => file.name.endsWith('.xsd'));
 
-    if (gmlFile && xsdFile) {
+    if (gmlFile) {
       const gmlReader = new FileReader();
-      const xsdReader = new FileReader();
-
       gmlReader.onload = () => this.loadGML(gmlReader.result);
-      xsdReader.onload = () => this.loadXSD(xsdReader.result);
-
       gmlReader.readAsText(gmlFile);
+
+    } else if (xsdFile) {
+      const xsdReader = new FileReader();
+      xsdReader.onload = () => this.loadXSD(xsdReader.result);
       xsdReader.readAsText(xsdFile);
     }
   }
