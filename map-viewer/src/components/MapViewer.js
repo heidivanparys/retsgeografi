@@ -26,6 +26,10 @@ const epsg25832 = get('EPSG:25832');
 
 class MapViewer extends LitElement {
   static styles = css`
+      
+      htm, div {
+          font-family: Helvetica;
+      }
       #map-container {
           display: flex;
           justify-content: center;
