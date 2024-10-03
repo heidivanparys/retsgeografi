@@ -53,7 +53,22 @@ class MapViewer extends LitElement {
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       }
 
-      button, label {
+      #layer-toggles {
+          position: absolute;
+          width: auto !important;
+          height: auto !important;
+          bottom: 20px;
+          left: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          background: rgba(255, 255, 255, 0.8);
+          border-radius: 8px;
+          padding: 10px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+      
+      .control-label {
           width: 40px;
           height: 40px;
           display: flex;
@@ -64,6 +79,10 @@ class MapViewer extends LitElement {
           border-radius: 50%;
           cursor: pointer;
           transition: background-color 0.3s, transform 0.2s;
+      }
+
+      button, label {
+
       }
 
       button:hover, label:hover {
@@ -169,6 +188,7 @@ class MapViewer extends LitElement {
     let features;
 
     try {
+      // Read features from the GML file
       features = format.readFeatures(gmlString, {
         featureProjection: 'EPSG:25832',  // Ensure the correct projection is used
         dataProjection: 'EPSG:25832',  // Use dataProjection if your GML file specifies the data projection
@@ -178,25 +198,49 @@ class MapViewer extends LitElement {
       return;
     }
 
-    const vectorSource = new VectorSource({
-      features: features,
+    // Group features by 'type' property, with a fallback for undefined names
+    const featureGroups = {};
+    features.forEach(feature => {
+      const featureType = feature.get('type') || 'Unnamed Type';  // Use fallback for undefined types
+      if (!featureGroups[featureType]) {
+        featureGroups[featureType] = [];
+      }
+      featureGroups[featureType].push(feature);
     });
 
-    const vectorLayer = new VectorLayer({
-      source: vectorSource,
-      title: 'GML Layer'  // Add a title for toggle control
+    // For each group, create a vector layer and add a checkbox for toggling its visibility
+    Object.keys(featureGroups).forEach(featureType => {
+      const vectorSource = new VectorSource({
+        features: featureGroups[featureType],
+      });
+
+      const vectorLayer = new VectorLayer({
+        source: vectorSource,
+        title: featureType,  // Set the feature type as the title for the toggle control
+        visible: true,  // Set the layer to be visible by default
+      });
+
+      // Add the layer to the map
+      this.map1.addLayer(vectorLayer);
+      this.vectorLayers.push(vectorLayer);  // Store the layer for later toggling
+
+      // Dynamically create a checkbox for toggling this layer
+      const layerToggles = this.shadowRoot.getElementById('layer-toggles');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = true;  // Set to checked by default (layer is visible)
+      checkbox.addEventListener('change', () => this.toggleLayer(vectorLayer));
+
+      // Create a label for the checkbox
+      const label = document.createElement('label');
+      label.textContent = featureType;  // Display the feature type as the label text
+      label.prepend(checkbox);  // Add the checkbox to the label
+
+      // Append the label (with checkbox) to the toggle controls section
+      layerToggles.appendChild(label);
     });
-
-    this.map1.addLayer(vectorLayer);
-    this.vectorLayers.push(vectorLayer);  // Store the layer for toggling
-
-    const extent = vectorSource.getExtent();
-    if (!isNaN(extent[0]) && !isNaN(extent[2])) {
-      this.map1.getView().fit(extent, { size: this.map1.getSize(), maxZoom: 18 });
-    } else {
-      console.error('Invalid extent:', extent);
-    }
   }
+
 
   loadXSD(xsdString) {
     const descriptions = this.parseXSD(xsdString);
@@ -269,34 +313,26 @@ class MapViewer extends LitElement {
     return html`
       <div id="map-container">
         <div id="map1" class="map"></div>
+        <div id="layer-toggles"></div>
+
 
         <div id="controls">
-          <button @click="${this.zoomIn}" title="Zoom In">
+          <button class="control-label" @click="${this.zoomIn}" title="Zoom In">
             <svg>
               <use href="${svg}#plus"></use>
             </svg>
           </button>
-          <button @click="${this.zoomOut}" title="Zoom Out">
+          <button class="control-label" @click="${this.zoomOut}" title="Zoom Out">
             <svg>
               <use href="${svg}#minus"></use>
             </svg>
           </button>
           <input type="file" id="file-input" multiple @change="${this.uploadFiles}" />
-          <label for="file-input" title="Upload GML & XSD">
+          <label class="control-label" for="file-input" title="Upload GML & XSD">
             <svg>
               <use href="${svg}#arrow-up"></use>
             </svg>
           </label>
-
-          <!-- Layer toggle controls -->
-          <div id="layer-toggles">
-            ${this.vectorLayers.map(layer => html`
-              <label>
-                <input type="checkbox" checked @change="${() => this.toggleLayer(layer)}">
-                ${layer.get('title')}
-              </label>
-            `)}
-          </div>
         </div>
       </div>
     `;
