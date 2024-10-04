@@ -201,6 +201,7 @@ class MapViewer extends LitElement {
       console.error('Error parsing GML:', error);
       return;
     }
+    console.log('Loaded features:', features)
 
     // Group features by 'type' property, with a fallback for undefined names
     const featureGroups = {};
