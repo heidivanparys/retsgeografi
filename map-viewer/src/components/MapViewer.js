@@ -15,6 +15,7 @@ import GML32 from 'ol/format/GML32.js';
 import { register } from 'ol/proj/proj4';
 import { get } from 'ol/proj';
 import proj4 from 'proj4';
+import CustomGML32 from './CustomGML32.js';
 
 // Define and register the projection for EPSG:25832
 proj4.defs('EPSG:25832', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +axis=enu');
@@ -188,7 +189,7 @@ class MapViewer extends LitElement {
   }
 
   loadGML(gmlString) {
-    const format = new GML32();  // Assuming GML 3.2 format
+    const format = new CustomGML32();  // Assuming GML 3.2 format
     let features;
 
     try {
@@ -206,7 +207,8 @@ class MapViewer extends LitElement {
     // Group features by 'type' property, with a fallback for undefined names
     const featureGroups = {};
     features.forEach(feature => {
-      const featureType = feature.get('type') || 'Unnamed Type';  // Use fallback for undefined types
+      // get property featureType set by CustomGML32
+      const featureType = feature.get('featureType') || 'Unnamed Type';  // Use fallback for undefined types
       if (!featureGroups[featureType]) {
         featureGroups[featureType] = [];
       }
