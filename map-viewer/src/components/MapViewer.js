@@ -202,15 +202,27 @@ class MapViewer extends LitElement {
       return;
     }
 
-    // Group features by 'type' property, with a fallback for undefined names
+    // Parse the GML string to extract types from <gml:featureMember> elements
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(gmlString, "application/xml");
+
+    // Group features by extracted 'type' (from the first child after <gml:featureMember>)
     const featureGroups = {};
-    features.forEach(feature => {
-      const featureType = feature.get('type') || 'Unnamed Type';  // Use fallback for undefined types
+    features.forEach((feature, index) => {
+      const featureMember = xmlDoc.getElementsByTagName("gml:featureMember")[index];
+
+      let featureType = 'Unnamed Type'; // Fallback if no type is found
+      if (featureMember && featureMember.children.length > 0) {
+        featureType = featureMember.children[0].localName;  // Use localName to exclude the namespace prefix
+      }
+
+      // Group the features by the extracted type
       if (!featureGroups[featureType]) {
         featureGroups[featureType] = [];
       }
       featureGroups[featureType].push(feature);
     });
+
 
     // For each group, create a vector layer and add a checkbox for toggling its visibility
     Object.keys(featureGroups).forEach(featureType => {
@@ -244,6 +256,7 @@ class MapViewer extends LitElement {
       layerToggles.appendChild(label);
     });
   }
+
 
 
   loadXSD(xsdString) {
