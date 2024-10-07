@@ -201,6 +201,7 @@ class MapViewer extends LitElement {
       console.error('Error parsing GML:', error);
       return;
     }
+    console.log('Loaded features:', features)
 
     // Parse the GML string to extract types from <gml:featureMember> elements
     const parser = new DOMParser();
