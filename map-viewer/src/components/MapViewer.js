@@ -190,10 +190,12 @@ class MapViewer extends LitElement {
   loadGML(gmlString) {
     const format = new GML32();  // Assuming GML 3.2 format
     let features;
+    
+    const modifiedGmlString = gmlString.replace(/rgeo:FeatureCollection/g, 'gml:FeatureCollection').replace(/rgeo:featureMember/g, 'gml:featureMember'); 
 
     try {
       // Read features from the GML file
-      features = format.readFeatures(gmlString, {
+      features = format.readFeatures(modifiedGmlString, {
         featureProjection: 'EPSG:25832',  // Ensure the correct projection is used
         dataProjection: 'EPSG:25832',  // Use dataProjection if your GML file specifies the data projection
       });
@@ -205,7 +207,7 @@ class MapViewer extends LitElement {
 
     // Parse the GML string to extract types from <gml:featureMember> elements
     const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(gmlString, "application/xml");
+    const xmlDoc = parser.parseFromString(modifiedGmlString, "application/xml");
 
     // Group features by extracted 'type' (from the first child after <gml:featureMember>)
     const featureGroups = {};
